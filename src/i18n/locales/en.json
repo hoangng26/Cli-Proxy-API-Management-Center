@@ -1448,6 +1448,7 @@
       "interactions": "Interactions API",
       "codex": "Codex",
       "xai": "xAI",
+      "commandcode": "Command Code",
       "claude": "Claude",
       "claudeApi": "ClaudeAPI",
       "vertex": "Vertex",

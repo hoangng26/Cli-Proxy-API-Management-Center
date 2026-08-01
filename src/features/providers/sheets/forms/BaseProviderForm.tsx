@@ -60,6 +60,7 @@ const emptyApiKeyEntry = (): ApiKeyEntryInput => ({
   weight: undefined,
 });
 const XAI_API_BASE_URL = 'https://api.x.ai/v1';
+const COMMANDCODE_API_BASE_URL = 'https://api.commandcode.ai';
 
 const stripDisableAllRule = (list?: string[]): string[] =>
   (list ?? []).filter((s) => s.trim() !== '*');
@@ -82,7 +83,13 @@ function buildInitialForm(
       apiKey: '',
       name: '',
       baseUrl:
-        brand === 'claudeApi' ? CLAUDE_API_BASE_URL : brand === 'xai' ? XAI_API_BASE_URL : '',
+        brand === 'claudeApi'
+          ? CLAUDE_API_BASE_URL
+          : brand === 'xai'
+            ? XAI_API_BASE_URL
+            : brand === 'commandcode'
+              ? COMMANDCODE_API_BASE_URL
+              : '',
       proxyUrl: '',
       prefix: '',
       disabled: false,
@@ -483,6 +490,7 @@ export function BaseProviderForm({
     brand === 'interactions' ||
     brand === 'codex' ||
     brand === 'xai' ||
+    brand === 'commandcode' ||
     isClaudeLikeBrand(brand) ||
     brand === 'openaiCompatibility';
   const supportsModelImage = brand === 'openaiCompatibility';

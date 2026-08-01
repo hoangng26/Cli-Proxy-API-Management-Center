@@ -8,6 +8,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
   claude: 'Claude',
   xai: 'xAI',
+  commandcode: 'Command Code',
   vertex: 'Vertex AI',
   openai: 'OpenAI Compatible',
   'openai-compatibility': 'OpenAI Compatible',
