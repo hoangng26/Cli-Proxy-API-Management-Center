@@ -12,7 +12,8 @@ import qiniuCloudLogo from '@/assets/icons/qiniu-cloud.png';
 import lmuAILogo from '@/assets/icons/lmu-ai.png';
 import xaiLightLogo from '@/assets/icons/grok.svg';
 import xaiDarkLogo from '@/assets/icons/grok-dark.svg';
-import commandcodeLogo from '@/assets/icons/deepseek.svg';
+import commandcodeLightLogo from '@/assets/icons/commandcode-light.svg';
+import commandcodeDarkLogo from '@/assets/icons/commandcode-dark.svg';
 import kimiLightLogo from '@/assets/icons/kimi-light.svg';
 import kimiDarkLogo from '@/assets/icons/kimi-dark.svg';
 import type { ProviderBrand } from './types';
@@ -32,7 +33,7 @@ export const PROVIDER_LOGOS: Record<ProviderBrand, ProviderBrandLogo> = {
   claudeApi: { src: claudeApiLogo },
   codex: { src: codexLogo },
   xai: { src: xaiLightLogo, darkSrc: xaiDarkLogo, transparent: true },
-  commandcode: { src: commandcodeLogo, transparent: true },
+  commandcode: { src: commandcodeLightLogo, darkSrc: commandcodeDarkLogo, transparent: true },
   vertex: { src: vertexLogo },
   openaiCompatibility: { src: openaiLightLogo, darkSrc: openaiDarkLogo, transparent: true },
   apikeyFun: { src: apikeyFunLogo },
