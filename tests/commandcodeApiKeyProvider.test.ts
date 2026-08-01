@@ -16,15 +16,21 @@ afterEach(() => {
 });
 
 describe('CommandCode API key provider', () => {
-  test('normalizes the backend commandcode-api-key contract and exposes a workbench resource', () => {
+  test('normalizes named blocks with api-key-entries and exposes a workbench resource', () => {
     const config = normalizeConfigResponse({
       'commandcode-api-key': [
         {
-          'api-key': 'user_secret',
+          name: 'primary',
+          'base-url': 'https://api.commandcode.ai',
+          'api-key-entries': [
+            {
+              'api-key': 'user_secret',
+              weight: 1,
+              'proxy-url': 'http://proxy.local',
+            },
+          ],
           priority: 2,
           prefix: 'cmc',
-          'base-url': 'https://api.commandcode.ai',
-          'proxy-url': 'http://proxy.local',
           headers: { 'X-Custom': 'value' },
           models: [{ name: 'deepseek/deepseek-v4-flash', alias: 'ds-flash' }],
           'excluded-models': ['stepfun/*'],
@@ -36,43 +42,57 @@ describe('CommandCode API key provider', () => {
 
     expect(config.commandcodeApiKeys).toEqual([
       {
-        apiKey: 'user_secret',
+        name: 'primary',
+        baseUrl: 'https://api.commandcode.ai',
+        apiKeyEntries: [
+          {
+            apiKey: 'user_secret',
+            weight: 1,
+            proxyUrl: 'http://proxy.local',
+          },
+        ],
         priority: 2,
         prefix: 'cmc',
-        baseUrl: 'https://api.commandcode.ai',
-        proxyUrl: 'http://proxy.local',
         headers: { 'X-Custom': 'value' },
         models: [{ name: 'deepseek/deepseek-v4-flash', alias: 'ds-flash' }],
         excludedModels: ['stepfun/*'],
         disableCooling: true,
         authIndex: 'commandcode:apikey:1',
+        sourceIndex: 0,
       },
     ]);
 
     const resource = commandcodeToResource(config.commandcodeApiKeys![0], 0);
     expect(resource.brand).toBe('commandcode');
+    expect(resource.name).toBe('primary');
     expect(resource.baseUrl).toBe('https://api.commandcode.ai');
     expect(resource.models).toEqual(['deepseek/deepseek-v4-flash']);
+    expect(resource.apiKeyEntryCount).toBe(1);
     expect(resource.flags.websockets).toBeUndefined();
     expect(resource.selector).toEqual({
       brand: 'commandcode',
-      apiKey: 'user_secret',
-      baseUrl: 'https://api.commandcode.ai',
+      name: 'primary',
       index: 0,
     });
+    expect(PROVIDER_DESCRIPTORS.commandcode.supportsName).toBe(true);
+    expect(PROVIDER_DESCRIPTORS.commandcode.supportsApiKey).toBe(false);
+    expect(PROVIDER_DESCRIPTORS.commandcode.supportsApiKeyEntries).toBe(true);
+    expect(PROVIDER_DESCRIPTORS.commandcode.supportsProxyUrl).toBe(false);
     expect(PROVIDER_DESCRIPTORS.commandcode.baseUrlRequired).toBe(false);
     expect(PROVIDER_DESCRIPTORS.commandcode.supportsWebsockets).toBe(false);
+    expect(PROVIDER_DESCRIPTORS.commandcode.sheetSize).toBe('lg');
   });
 
-  test('creates and deletes CommandCode keys through the backend management contract', async () => {
+  test('creates and deletes CommandCode named blocks through the backend management contract', async () => {
     const calls: Array<{ method: string; url: string; data?: unknown }> = [];
     apiClient.get = (async (url: string) => {
       calls.push({ method: 'GET', url });
       return {
         'commandcode-api-key': [
           {
-            'api-key': 'existing',
+            name: 'existing',
             'base-url': 'https://api.commandcode.ai',
+            'api-key-entries': [{ 'api-key': 'existing_key', weight: 1 }],
             'future-field': 'preserved',
           },
         ],
@@ -88,11 +108,17 @@ describe('CommandCode API key provider', () => {
     }) as typeof apiClient.delete;
 
     await providersApi.createCommandCodeConfig({
-      apiKey: 'user_new',
+      name: 'primary',
       priority: 1,
       prefix: 'cmc',
       baseUrl: 'https://api.commandcode.ai',
-      proxyUrl: 'direct',
+      apiKeyEntries: [
+        {
+          apiKey: 'user_new',
+          weight: 1,
+          proxyUrl: 'direct',
+        },
+      ],
       headers: { 'X-Custom': 'value' },
       models: [
         {
@@ -103,7 +129,7 @@ describe('CommandCode API key provider', () => {
       excludedModels: ['stepfun/*'],
       disableCooling: true,
     });
-    await providersApi.deleteCommandCodeConfig('user_new', 'https://api.commandcode.ai');
+    await providersApi.deleteCommandCodeConfig('primary');
 
     expect(calls).toEqual([
       { method: 'GET', url: '/config' },
@@ -112,16 +138,23 @@ describe('CommandCode API key provider', () => {
         url: '/commandcode-api-key',
         data: [
           {
-            'api-key': 'existing',
+            name: 'existing',
             'base-url': 'https://api.commandcode.ai',
+            'api-key-entries': [{ 'api-key': 'existing_key', weight: 1 }],
             'future-field': 'preserved',
           },
           {
-            'api-key': 'user_new',
+            name: 'primary',
             priority: 1,
             prefix: 'cmc',
             'base-url': 'https://api.commandcode.ai',
-            'proxy-url': 'direct',
+            'api-key-entries': [
+              {
+                'api-key': 'user_new',
+                weight: 1,
+                'proxy-url': 'direct',
+              },
+            ],
             headers: { 'X-Custom': 'value' },
             models: [
               {
@@ -136,7 +169,7 @@ describe('CommandCode API key provider', () => {
       },
       {
         method: 'DELETE',
-        url: '/commandcode-api-key?api-key=user_new&base-url=https%3A%2F%2Fapi.commandcode.ai',
+        url: '/commandcode-api-key?name=primary',
       },
     ]);
   });

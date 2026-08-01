@@ -73,3 +73,19 @@ export interface OpenAIProviderConfig {
   sourceIndex?: number;
   [key: string]: unknown;
 }
+
+export interface CommandCodeProviderConfig {
+  name: string;
+  prefix?: string;
+  baseUrl?: string;
+  apiKeyEntries: ApiKeyEntry[];
+  disabled?: boolean;
+  headers?: Record<string, string>;
+  models?: ModelAlias[];
+  priority?: number;
+  excludedModels?: string[];
+  disableCooling?: boolean;
+  authIndex?: string;
+  /** Original index in the backend commandcode-api-key array. */
+  sourceIndex?: number;
+}

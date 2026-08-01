@@ -1,6 +1,7 @@
 import type {
   ApiKeyEntry,
   CloakConfig,
+  CommandCodeProviderConfig,
   GeminiKeyConfig,
   ModelAlias,
   OpenAIProviderConfig,
@@ -270,6 +271,47 @@ const normalizeOpenAIProvider = (
   return result;
 };
 
+const normalizeCommandCodeProvider = (
+  provider: unknown,
+  sourceIndex?: number
+): CommandCodeProviderConfig | null => {
+  if (!isRecord(provider)) return null;
+  const name = provider.name;
+  if (!name) return null;
+
+  const apiKeyEntries = Array.isArray(provider['api-key-entries'])
+    ? (provider['api-key-entries']
+        .map((entry) => normalizeApiKeyEntry(entry))
+        .filter(Boolean) as ApiKeyEntry[])
+    : [];
+
+  const result: CommandCodeProviderConfig = {
+    name: String(name),
+    apiKeyEntries,
+  };
+
+  const baseUrl = provider['base-url'];
+  if (baseUrl) result.baseUrl = String(baseUrl);
+  const disabled = normalizeBoolean(provider.disabled);
+  if (disabled !== undefined) result.disabled = disabled;
+  const disableCooling = normalizeBoolean(provider['disable-cooling']);
+  if (disableCooling !== undefined) result.disableCooling = disableCooling;
+  const prefix = normalizePrefix(provider.prefix);
+  if (prefix) result.prefix = prefix;
+  const headers = normalizeHeaders(provider.headers);
+  if (headers) result.headers = headers;
+  const models = normalizeModelAliases(provider.models);
+  if (models.length) result.models = models;
+  const priority = provider.priority;
+  if (priority !== undefined) result.priority = Number(priority);
+  const excludedModels = normalizeExcludedModels(provider['excluded-models']);
+  if (excludedModels.length) result.excludedModels = excludedModels;
+  const authIndex = normalizeAuthIndex(provider['auth-index']);
+  if (authIndex) result.authIndex = authIndex;
+  if (sourceIndex !== undefined) result.sourceIndex = sourceIndex;
+  return result;
+};
+
 const normalizeOauthExcluded = (payload: unknown): Record<string, string[]> | undefined => {
   if (!isRecord(payload)) return undefined;
   const source = payload['oauth-excluded-models'] ?? payload.items ?? payload;
@@ -374,8 +416,8 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   const commandcodeList = raw['commandcode-api-key'];
   if (Array.isArray(commandcodeList)) {
     config.commandcodeApiKeys = commandcodeList
-      .map((item) => normalizeProviderKeyConfig(item))
-      .filter(Boolean) as ProviderKeyConfig[];
+      .map((item, index) => normalizeCommandCodeProvider(item, index))
+      .filter(Boolean) as CommandCodeProviderConfig[];
   }
 
   const claudeList = raw['claude-api-key'];
@@ -409,6 +451,7 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
 
 export {
   normalizeApiKeyEntry,
+  normalizeCommandCodeProvider,
   normalizeGeminiKeyConfig,
   normalizeModelAliases,
   normalizeOpenAIProvider,

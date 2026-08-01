@@ -43,6 +43,19 @@ const buildV1ModelsEndpoint = (baseUrl: string): string => {
   return `${trimmed}/v1/models`;
 };
 
+const COMMANDCODE_DEFAULT_BASE_URL = 'https://api.commandcode.ai';
+
+const buildCommandCodeModelsEndpoint = (baseUrl: string): string => {
+  const normalized = normalizeApiBase(baseUrl || COMMANDCODE_DEFAULT_BASE_URL);
+  if (!normalized) return '';
+  let root = normalized.replace(/\/+$/g, '');
+  if (/\/provider\/v1\/models$/i.test(root)) return root;
+  if (/\/provider\/v1$/i.test(root)) return `${root}/models`;
+  root = root.replace(/\/provider\/v1(?:\/.*)?$/i, '');
+  root = root.replace(/\/v1(?:\/.*)?$/i, '');
+  return `${root}/provider/v1/models`;
+};
+
 const buildClaudeModelsEndpoint = (baseUrl: string): string => {
   const normalized = normalizeApiBase(baseUrl);
   const fallback = normalized || DEFAULT_CLAUDE_BASE_URL;
@@ -151,6 +164,43 @@ export const modelsApi = {
     authIndex?: string
   ) {
     const endpoint = buildModelsEndpoint(baseUrl);
+    if (!endpoint) {
+      throw new Error('Invalid base url');
+    }
+
+    const trimmedAuthIndex = authIndex?.trim() || undefined;
+    const resolvedHeaders = { ...headers };
+    if (apiKey && !hasHeader(resolvedHeaders, 'authorization')) {
+      resolvedHeaders.Authorization = `Bearer ${apiKey}`;
+    } else if (trimmedAuthIndex && !hasHeader(resolvedHeaders, 'authorization')) {
+      resolvedHeaders.Authorization = 'Bearer $TOKEN$';
+    }
+
+    const result = await apiCallApi.request({
+      authIndex: trimmedAuthIndex,
+      method: 'GET',
+      url: endpoint,
+      header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined,
+    });
+
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      throw new Error(getApiCallErrorMessage(result));
+    }
+
+    const payload = result.body ?? result.bodyText;
+    return normalizeModelList(payload, { dedupe: true });
+  },
+
+  /**
+   * Fetch CommandCode models from /provider/v1/models (public catalog; auth optional).
+   */
+  async fetchCommandCodeModelsViaApiCall(
+    baseUrl: string,
+    apiKey?: string,
+    headers: Record<string, string> = {},
+    authIndex?: string
+  ) {
+    const endpoint = buildCommandCodeModelsEndpoint(baseUrl);
     if (!endpoint) {
       throw new Error('Invalid base url');
     }

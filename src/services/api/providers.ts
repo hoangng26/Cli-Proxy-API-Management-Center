@@ -4,8 +4,13 @@
 
 import { apiClient } from './client';
 import { isRecord } from '@/utils/helpers';
-import { normalizeOpenAIProvider, normalizeProviderKeyConfig } from './transformers';
+import {
+  normalizeCommandCodeProvider,
+  normalizeOpenAIProvider,
+  normalizeProviderKeyConfig,
+} from './transformers';
 import type {
+  CommandCodeProviderConfig,
   GeminiKeyConfig,
   OpenAIProviderConfig,
   ProviderKeyConfig,
@@ -35,7 +40,18 @@ const GEMINI_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
 const INTERACTIONS_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
 const CODEX_KEY_FIELDS = [...PROVIDER_COMMON_KEY_FIELDS, 'websockets'] as const;
 const XAI_KEY_FIELDS = CODEX_KEY_FIELDS;
-const COMMANDCODE_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
+const COMMANDCODE_PROVIDER_FIELDS = [
+  'name',
+  'priority',
+  'disabled',
+  'prefix',
+  'base-url',
+  'api-key-entries',
+  'headers',
+  'models',
+  'excluded-models',
+  'disable-cooling',
+] as const;
 const CLAUDE_KEY_FIELDS = [
   ...PROVIDER_COMMON_KEY_FIELDS,
   'cloak',
@@ -225,6 +241,9 @@ const matchesProviderKey = (record: Record<string, unknown>, apiKey: string, bas
 const matchesOpenAIProvider = (record: Record<string, unknown>, name: string) =>
   openAIProviderIdentity(record) === name.trim();
 
+const matchesNamedProvider = (record: Record<string, unknown>, name: string) =>
+  openAIProviderIdentity(record).toLowerCase() === name.trim().toLowerCase();
+
 const mergeModelPayloads = (
   raw: unknown,
   models: unknown,
@@ -275,6 +294,23 @@ const mergeOpenAIProviderPayload = (raw: unknown, payload: Record<string, unknow
   return next;
 };
 
+const mergeCommandCodeProviderPayload = (raw: unknown, payload: Record<string, unknown>) => {
+  const next = mergeKnownFields(raw, payload, COMMANDCODE_PROVIDER_FIELDS);
+  const rawApiKeyEntries = isRecord(raw) ? raw['api-key-entries'] : undefined;
+  const apiKeyEntries = payload['api-key-entries'];
+  if (Array.isArray(apiKeyEntries)) {
+    next['api-key-entries'] = mergeKnownRecordList(
+      rawApiKeyEntries,
+      apiKeyEntries.filter(isRecord),
+      API_KEY_ENTRY_FIELDS,
+      apiKeyEntryIdentity
+    );
+  }
+  const models = mergeModelPayloads(raw, payload.models);
+  if (models) next.models = models;
+  return next;
+};
+
 const extractArrayPayload = (data: unknown, key: string): unknown[] => {
   if (!isRecord(data)) return [];
   const list = data[key];
@@ -286,6 +322,17 @@ const buildProviderDeleteQuery = (apiKey: string, baseUrl?: string) => {
   params.set('api-key', apiKey.trim());
   params.set('base-url', (baseUrl ?? '').trim());
   return `?${params.toString()}`;
+};
+
+const buildNamedProviderDeleteQuery = (name?: string, index?: number) => {
+  const params = new URLSearchParams();
+  if (name?.trim()) {
+    params.set('name', name.trim());
+  } else if (index !== undefined) {
+    params.set('index', String(index));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
 };
 
 const serializeModelAliases = (models?: ModelAlias[], includeOpenAIFields = false) =>
@@ -430,6 +477,28 @@ const serializeOpenAIProvider = (provider: OpenAIProviderConfig) => {
   return payload;
 };
 
+const serializeCommandCodeProvider = (provider: CommandCodeProviderConfig) => {
+  const payload: Record<string, unknown> = {
+    name: provider.name,
+    'api-key-entries': Array.isArray(provider.apiKeyEntries)
+      ? provider.apiKeyEntries.map((entry) => serializeApiKeyEntry(entry))
+      : [],
+  };
+  if (provider.baseUrl?.trim()) payload['base-url'] = provider.baseUrl.trim();
+  if (provider.prefix?.trim()) payload.prefix = provider.prefix.trim();
+  if (provider.disabled !== undefined) payload.disabled = provider.disabled;
+  const headers = serializeHeaders(provider.headers);
+  if (headers) payload.headers = headers;
+  const models = serializeModelAliases(provider.models);
+  if (models && models.length) payload.models = models;
+  if (provider.priority !== undefined) payload.priority = provider.priority;
+  if (provider.excludedModels && provider.excludedModels.length) {
+    payload['excluded-models'] = provider.excludedModels;
+  }
+  if (provider.disableCooling) payload['disable-cooling'] = true;
+  return payload;
+};
+
 export const providersApi = {
   createGeminiKey: (config: GeminiKeyConfig) =>
     mutateLatestProviderList('gemini-api-key', (latestItems) =>
@@ -511,29 +580,35 @@ export const providersApi = {
   deleteXAIConfig: (apiKey: string, baseUrl?: string) =>
     apiClient.delete(`/xai-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),
 
-  createCommandCodeConfig: (config: ProviderKeyConfig) =>
+  async getCommandCodeProviders(): Promise<CommandCodeProviderConfig[]> {
+    const data = await apiClient.get('/commandcode-api-key');
+    const list = extractArrayPayload(data, 'commandcode-api-key');
+    return list
+      .map((item, index) => normalizeCommandCodeProvider(item, index))
+      .filter(Boolean) as CommandCodeProviderConfig[];
+  },
+
+  createCommandCodeConfig: (provider: CommandCodeProviderConfig) =>
     mutateLatestProviderList('commandcode-api-key', (latestItems) =>
-      appendLatestProviderRecord(latestItems, serializeProviderKey(config), (raw, payload) =>
-        mergeProviderKeyPayload(raw, payload, COMMANDCODE_KEY_FIELDS)
+      appendLatestProviderRecord(
+        latestItems,
+        serializeCommandCodeProvider(provider),
+        mergeCommandCodeProviderPayload
       )
     ),
 
-  updateCommandCodeConfig: (
-    apiKey: string,
-    baseUrl: string | undefined,
-    config: ProviderKeyConfig
-  ) =>
+  updateCommandCodeConfig: (name: string, provider: CommandCodeProviderConfig) =>
     mutateLatestProviderList('commandcode-api-key', (latestItems) =>
       replaceLatestProviderRecord(
         latestItems,
-        (record) => matchesProviderKey(record, apiKey, baseUrl),
-        serializeProviderKey(config),
-        (raw, payload) => mergeProviderKeyPayload(raw, payload, COMMANDCODE_KEY_FIELDS)
+        (record) => matchesNamedProvider(record, name),
+        serializeCommandCodeProvider(provider),
+        mergeCommandCodeProviderPayload
       )
     ),
 
-  deleteCommandCodeConfig: (apiKey: string, baseUrl?: string) =>
-    apiClient.delete(`/commandcode-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),
+  deleteCommandCodeConfig: (name: string, index?: number) =>
+    apiClient.delete(`/commandcode-api-key${buildNamedProviderDeleteQuery(name, index)}`),
 
   createClaudeConfig: (config: ProviderKeyConfig) =>
     mutateLatestProviderList('claude-api-key', (latestItems) =>

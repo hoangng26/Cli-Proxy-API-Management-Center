@@ -3,7 +3,12 @@
  * 与基线 /config 返回结构保持一致（内部使用驼峰形式）
  */
 
-import type { GeminiKeyConfig, ProviderKeyConfig, OpenAIProviderConfig } from './provider';
+import type {
+  CommandCodeProviderConfig,
+  GeminiKeyConfig,
+  ProviderKeyConfig,
+  OpenAIProviderConfig,
+} from './provider';
 
 export interface QuotaExceededConfig {
   switchProject?: boolean;
@@ -27,7 +32,7 @@ export interface Config {
   interactionsApiKeys?: GeminiKeyConfig[];
   codexApiKeys?: ProviderKeyConfig[];
   xaiApiKeys?: ProviderKeyConfig[];
-  commandcodeApiKeys?: ProviderKeyConfig[];
+  commandcodeApiKeys?: CommandCodeProviderConfig[];
   claudeApiKeys?: ProviderKeyConfig[];
   vertexApiKeys?: ProviderKeyConfig[];
   openaiCompatibility?: OpenAIProviderConfig[];

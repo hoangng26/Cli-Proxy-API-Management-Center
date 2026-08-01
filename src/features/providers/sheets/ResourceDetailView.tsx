@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Collapsible } from '@/components/ui/Collapsible';
 import { IconCheck, IconX } from '@/components/ui/icons';
 import { getProviderTotalStats, type ProviderRecentUsageMap } from '@/components/providers/utils';
-import type { OpenAIProviderConfig } from '@/types';
+import type { CommandCodeProviderConfig, OpenAIProviderConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
 import {
   getSponsorProviderDefinition,
@@ -116,9 +116,15 @@ export function ResourceDetailView({ resource, usageByProvider }: ResourceDetail
     ['apiKeyEntries', String(resource.apiKeyEntryCount)],
   ];
 
-  const openaiConfig =
-    resource.brand === 'openaiCompatibility' ? (resource.raw as OpenAIProviderConfig) : null;
-  const apiKeyEntries = openaiConfig?.apiKeyEntries ?? [];
+  const namedMultiKeyConfig =
+    resource.brand === 'openaiCompatibility'
+      ? (resource.raw as OpenAIProviderConfig)
+      : resource.brand === 'commandcode'
+        ? (resource.raw as CommandCodeProviderConfig)
+        : null;
+  const apiKeyEntries = namedMultiKeyConfig?.apiKeyEntries ?? [];
+  const multiKeyName = namedMultiKeyConfig?.name ?? '';
+  const multiKeyBaseUrl = namedMultiKeyConfig?.baseUrl;
 
   return (
     <div>
@@ -135,7 +141,7 @@ export function ResourceDetailView({ resource, usageByProvider }: ResourceDetail
         ))}
       </dl>
 
-      {openaiConfig && apiKeyEntries.length > 0 ? (
+      {namedMultiKeyConfig && apiKeyEntries.length > 0 ? (
         <div className={styles.apiKeyEntriesSection}>
           <div className={styles.apiKeyEntriesLabel}>
             {t('providersPage.form.apiKeyEntriesSection')}: {apiKeyEntries.length}
@@ -145,9 +151,9 @@ export function ResourceDetailView({ resource, usageByProvider }: ResourceDetail
               const entryStats = usageByProvider
                 ? getProviderTotalStats(
                     usageByProvider,
-                    openaiConfig.name,
+                    multiKeyName,
                     entry.apiKey,
-                    openaiConfig.baseUrl
+                    multiKeyBaseUrl
                   )
                 : { success: 0, failure: 0 };
               return (

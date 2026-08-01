@@ -13,6 +13,7 @@ export const MODEL_DISCOVERY_BRANDS: ReadonlyArray<ProviderBrand> = [
   'claude',
   'claudeApi',
   'openaiCompatibility',
+  'commandcode',
 ];
 
 export const isModelDiscoveryBrand = (brand: ProviderBrand): boolean =>
@@ -100,6 +101,29 @@ export function useModelDiscovery(args: UseModelDiscoveryArgs): UseModelDiscover
           // without any auth/headers before surfacing the original error.
           try {
             next = await modelsApi.fetchModelsViaApiCall(baseUrl);
+          } catch {
+            throw firstErr;
+          }
+        }
+      } else if (brand === 'commandcode') {
+        const firstEntry = (apiKeyEntries ?? []).find(
+          (e) =>
+            (e.apiKey ?? '').trim() || (e.existingApiKey ?? '').trim() || (e.authIndex ?? '').trim()
+        );
+        const entryKey =
+          (firstEntry?.apiKey ?? '').trim() || (firstEntry?.existingApiKey ?? '').trim();
+        const entryAuthIndex = (firstEntry?.authIndex ?? '').trim() || resolvedAuthIndex;
+        try {
+          next = await modelsApi.fetchCommandCodeModelsViaApiCall(
+            baseUrl,
+            entryKey,
+            baseHeaders,
+            entryAuthIndex
+          );
+        } catch (firstErr) {
+          // Catalog is public; retry without auth if credentialed fetch fails.
+          try {
+            next = await modelsApi.fetchCommandCodeModelsViaApiCall(baseUrl);
           } catch {
             throw firstErr;
           }

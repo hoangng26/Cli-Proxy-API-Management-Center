@@ -1,4 +1,9 @@
-import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
+import type {
+  CommandCodeProviderConfig,
+  GeminiKeyConfig,
+  OpenAIProviderConfig,
+  ProviderKeyConfig,
+} from '@/types';
 import { hasDisableAllModelsRule, stripDisableAllModelsRule } from '@/components/providers/utils';
 import { maskApiKey } from '@/utils/format';
 import {
@@ -72,15 +77,7 @@ const truncateForId = (value: string | undefined | null): string => {
 };
 
 function providerKeyToResource(
-  brand:
-    | 'gemini'
-    | 'interactions'
-    | 'codex'
-    | 'xai'
-    | 'commandcode'
-    | 'claude'
-    | 'claudeApi'
-    | 'vertex',
+  brand: 'gemini' | 'interactions' | 'codex' | 'xai' | 'claude' | 'claudeApi' | 'vertex',
   config: GeminiKeyConfig | ProviderKeyConfig,
   index: number
 ): ProviderResource {
@@ -143,8 +140,37 @@ export function xaiToResource(config: ProviderKeyConfig, index: number): Provide
   return providerKeyToResource('xai', config, index);
 }
 
-export function commandcodeToResource(config: ProviderKeyConfig, index: number): ProviderResource {
-  return providerKeyToResource('commandcode', config, index);
+export function commandcodeToResource(
+  config: CommandCodeProviderConfig,
+  index: number
+): ProviderResource {
+  const sourceIndex = config.sourceIndex ?? index;
+  const name = (config.name ?? '').trim();
+  const firstEntry = config.apiKeyEntries?.[0];
+  const previewApiKey = firstEntry?.apiKey ? maskApiKey(firstEntry.apiKey) : null;
+  return {
+    id: buildId('commandcode', sourceIndex, truncateForId(name) || `#${sourceIndex}`),
+    brand: 'commandcode',
+    originalIndex: sourceIndex,
+    name: name || null,
+    identifier: name || `#${sourceIndex + 1}`,
+    apiKeyPreview: previewApiKey,
+    apiKey: null,
+    authIndex: config.authIndex ?? null,
+    baseUrl: config.baseUrl ?? null,
+    proxyUrl: null,
+    prefix: config.prefix ?? null,
+    modelCount: config.models?.length ?? 0,
+    models: collectModelNames(config.models),
+    priority: normalizePriority(config.priority),
+    headerCount: countHeaders(config.headers),
+    excludedModelCount: stripDisableAllModelsRule(config.excludedModels).length,
+    apiKeyEntryCount: config.apiKeyEntries?.length ?? 0,
+    disabled: config.disabled === true || hasDisableAllModelsRule(config.excludedModels),
+    flags: {},
+    selector: { brand: 'commandcode', name, index: sourceIndex },
+    raw: config,
+  };
 }
 
 export function claudeToResource(config: ProviderKeyConfig, index: number): ProviderResource {

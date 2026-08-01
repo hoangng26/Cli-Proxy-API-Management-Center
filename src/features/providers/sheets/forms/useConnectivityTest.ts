@@ -8,6 +8,9 @@ import {
   buildInteractionsProbePayload,
   INTERACTIONS_API_REVISION,
   buildOpenAIChatCompletionsEndpoint,
+  buildCommandCodeGenerateEndpoint,
+  buildCommandCodeGenerateProbeBody,
+  buildCommandCodeFixedHeaders,
 } from '@/components/providers/utils';
 import { buildHeaderObject, hasHeader } from '@/utils/headers';
 import { getErrorMessage } from '@/utils/helpers';
@@ -182,7 +185,7 @@ export function useConnectivityTest(
 
   const runOpenAIKey = useCallback(
     async (idx: number): Promise<boolean> => {
-      if (brand !== 'openaiCompatibility') return false;
+      if (brand !== 'openaiCompatibility' && brand !== 'commandcode') return false;
 
       const trimmedBase = baseUrl.trim();
       if (!trimmedBase) {
@@ -192,7 +195,10 @@ export function useConnectivityTest(
         });
         return false;
       }
-      const endpoint = buildOpenAIChatCompletionsEndpoint(trimmedBase);
+      const endpoint =
+        brand === 'commandcode'
+          ? buildCommandCodeGenerateEndpoint(trimmedBase)
+          : buildOpenAIChatCompletionsEndpoint(trimmedBase);
       if (!endpoint) {
         updateOpenaiStatus(idx, {
           state: 'error',
@@ -223,6 +229,7 @@ export function useConnectivityTest(
       const headerObj: Record<string, string> = {
         'Content-Type': 'application/json',
         ...buildHeaderObject(formHeaders),
+        ...(brand === 'commandcode' ? buildCommandCodeFixedHeaders() : {}),
       };
       if (!hasHeader(headerObj, 'authorization')) {
         if (entryKey) {
@@ -231,6 +238,16 @@ export function useConnectivityTest(
           headerObj.Authorization = 'Bearer $TOKEN$';
         }
       }
+
+      const requestBody =
+        brand === 'commandcode'
+          ? buildCommandCodeGenerateProbeBody(model)
+          : JSON.stringify({
+              model,
+              messages: [{ role: 'user', content: 'Hi' }],
+              stream: false,
+              max_tokens: 5,
+            });
 
       updateOpenaiStatus(idx, { state: 'loading', message: '' });
       setInFlight((n) => n + 1);
@@ -241,12 +258,7 @@ export function useConnectivityTest(
             method: 'POST',
             url: endpoint,
             header: headerObj,
-            data: JSON.stringify({
-              model,
-              messages: [{ role: 'user', content: 'Hi' }],
-              stream: false,
-              max_tokens: 5,
-            }),
+            data: requestBody,
           },
           { timeout: DEFAULT_TIMEOUT_MS }
         );
@@ -279,7 +291,7 @@ export function useConnectivityTest(
   );
 
   const runOpenAIAllKeys = useCallback(async (): Promise<void> => {
-    if (brand !== 'openaiCompatibility') return;
+    if (brand !== 'openaiCompatibility' && brand !== 'commandcode') return;
     const entries = apiKeyEntries ?? [];
     if (!entries.length) return;
     await Promise.all(entries.map((_, idx) => runOpenAIKey(idx)));

@@ -25,7 +25,7 @@ import {
   getProviderUsageKey,
   type ProviderRecentUsageMap,
 } from '@/components/providers/utils';
-import type { OpenAIProviderConfig } from '@/types';
+import type { CommandCodeProviderConfig, OpenAIProviderConfig } from '@/types';
 import type { StatusBarData } from '@/utils/recentRequests';
 import type { ProviderResource } from '../types';
 import { isMultiProtocolSponsorBrand } from '../sponsorDefinitions';
@@ -48,12 +48,23 @@ const columnWidths = ['180px', '220px', '72px', '138px', '174px', '176px'];
 const isSponsorResource = (resource: ProviderResource): boolean =>
   isMultiProtocolSponsorBrand(resource.brand);
 
+const asNamedMultiKey = (resource: ProviderResource) => {
+  if (resource.brand === 'openaiCompatibility') {
+    return resource.raw as OpenAIProviderConfig;
+  }
+  if (resource.brand === 'commandcode') {
+    return resource.raw as CommandCodeProviderConfig;
+  }
+  return null;
+};
+
 const resolveStatusBarData = (
   resource: ProviderResource,
   usageByProvider: ProviderRecentUsageMap
 ): StatusBarData => {
-  if (resource.brand === 'openaiCompatibility') {
-    return getOpenAIProviderRecentStatusData(resource.raw as OpenAIProviderConfig, usageByProvider);
+  const multiKey = asNamedMultiKey(resource);
+  if (multiKey) {
+    return getOpenAIProviderRecentStatusData(multiKey, usageByProvider);
   }
   return getProviderRecentStatusData(
     usageByProvider,
@@ -67,8 +78,9 @@ const resolveTotalStats = (
   resource: ProviderResource,
   usageByProvider: ProviderRecentUsageMap
 ): { success: number; failure: number } => {
-  if (resource.brand === 'openaiCompatibility') {
-    return getOpenAIProviderTotalStats(resource.raw as OpenAIProviderConfig, usageByProvider);
+  const multiKey = asNamedMultiKey(resource);
+  if (multiKey) {
+    return getOpenAIProviderTotalStats(multiKey, usageByProvider);
   }
   return getProviderTotalStats(
     usageByProvider,
@@ -116,7 +128,7 @@ export function ProviderResourceTable({
       });
       return <div className={styles.metricsCell}>{items}</div>;
     }
-    if (r.brand === 'openaiCompatibility') {
+    if (r.brand === 'openaiCompatibility' || r.brand === 'commandcode') {
       items.push(
         renderMetric('models', t('providersPage.table.metrics.models'), r.modelCount),
         renderMetric('keys', t('providersPage.table.metrics.keys'), r.apiKeyEntryCount),
@@ -165,7 +177,7 @@ export function ProviderResourceTable({
         </div>
       );
     }
-    if (r.brand === 'openaiCompatibility') {
+    if (r.brand === 'openaiCompatibility' || r.brand === 'commandcode') {
       const extra = r.apiKeyEntryCount > 1 ? ` · +${r.apiKeyEntryCount - 1}` : '';
       return (
         <div className={styles.primaryCell}>

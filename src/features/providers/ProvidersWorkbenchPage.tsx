@@ -11,7 +11,7 @@ import {
   getProviderUsageKey,
   type ProviderRecentUsageMap,
 } from '@/components/providers/utils';
-import type { OpenAIProviderConfig } from '@/types';
+import type { CommandCodeProviderConfig, OpenAIProviderConfig } from '@/types';
 import { ProviderHeaderCard } from './components/ProviderHeaderCard';
 import { ProviderCategoryList } from './components/ProviderCategoryList';
 import { ProviderResourcePanel } from './components/ProviderResourcePanel';
@@ -86,8 +86,16 @@ const getResourceRecentSuccess = (
     return 0;
   }
   if (resource.brand === 'openaiCompatibility') {
-    return getOpenAIProviderRecentWindowStats(resource.raw as OpenAIProviderConfig, usageByProvider)
-      .success;
+    return getOpenAIProviderRecentWindowStats(
+      resource.raw as OpenAIProviderConfig,
+      usageByProvider
+    ).success;
+  }
+  if (resource.brand === 'commandcode') {
+    return getOpenAIProviderRecentWindowStats(
+      resource.raw as CommandCodeProviderConfig,
+      usageByProvider
+    ).success;
   }
   return getProviderRecentWindowStats(
     usageByProvider,

@@ -1,4 +1,4 @@
-import type { OpenAIProviderConfig } from '@/types';
+import type { ApiKeyEntry } from '@/types';
 import {
   buildRecentRequestCompositeKey,
   mergeRecentRequestBucketGroups,
@@ -8,6 +8,12 @@ import {
   type RecentRequestUsageEntry,
   type StatusBarData,
 } from '@/utils/recentRequests';
+
+interface NamedMultiKeyProvider {
+  name: string;
+  baseUrl?: string;
+  apiKeyEntries?: ApiKeyEntry[];
+}
 
 const DISABLE_ALL_MODELS_RULE = '*';
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
@@ -61,6 +67,76 @@ export const buildOpenAIChatCompletionsEndpoint = (baseUrl: string): string => {
   }
   return `${trimmed}/chat/completions`;
 };
+
+const COMMANDCODE_DEFAULT_BASE_URL = 'https://api.commandcode.ai';
+
+export const buildCommandCodeModelsEndpoint = (baseUrl: string): string => {
+  const trimmed = normalizeUpstreamBaseUrl(baseUrl || COMMANDCODE_DEFAULT_BASE_URL);
+  if (!trimmed) return '';
+  let root = trimmed.replace(/\/+$/g, '');
+  if (root.endsWith('/provider/v1/models')) {
+    return root;
+  }
+  if (root.endsWith('/provider/v1')) {
+    return `${root}/models`;
+  }
+  root = root.replace(/\/provider\/v1(?:\/.*)?$/i, '');
+  root = root.replace(/\/v1(?:\/.*)?$/i, '');
+  root = root.replace(/\/alpha(?:\/.*)?$/i, '');
+  return `${root}/provider/v1/models`;
+};
+
+export const buildCommandCodeGenerateEndpoint = (baseUrl: string): string => {
+  const trimmed = normalizeUpstreamBaseUrl(baseUrl || COMMANDCODE_DEFAULT_BASE_URL);
+  if (!trimmed) return '';
+  let root = trimmed.replace(/\/+$/g, '');
+  if (root.endsWith('/alpha/generate')) {
+    return root;
+  }
+  if (root.endsWith('/alpha')) {
+    return `${root}/generate`;
+  }
+  root = root.replace(/\/provider\/v1(?:\/.*)?$/i, '');
+  root = root.replace(/\/v1(?:\/.*)?$/i, '');
+  root = root.replace(/\/alpha(?:\/.*)?$/i, '');
+  return `${root}/alpha/generate`;
+};
+
+const COMMANDCODE_VERSION_HEADER = '0.25.7';
+
+export const buildCommandCodeGenerateProbeBody = (model: string): string => {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const payload = {
+    threadId: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    memory: '',
+    config: {
+      workingDir: '',
+      date,
+      environment: 'cli',
+      structure: [],
+      isGitRepo: false,
+      currentBranch: '',
+      mainBranch: '',
+      gitStatus: '',
+      recentCommits: [],
+    },
+    params: {
+      model,
+      stream: true,
+      max_tokens: 16,
+      temperature: 0.3,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }],
+    },
+  };
+  return JSON.stringify(payload);
+};
+
+export const buildCommandCodeFixedHeaders = (): Record<string, string> => ({
+  'x-session-id': crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  'x-command-code-version': COMMANDCODE_VERSION_HEADER,
+  'x-cli-environment': 'cli',
+});
 
 export const buildCodexResponsesEndpoint = (baseUrl: string): string => {
   const trimmed = normalizeUpstreamBaseUrl(baseUrl);
@@ -205,8 +281,8 @@ export function getProviderRecentWindowStats(
   return sumRecentRequests(getProviderRecentBuckets(usageByProvider, provider, apiKey, baseUrl));
 }
 
-const collectOpenAIProviderRecentBuckets = (
-  provider: OpenAIProviderConfig,
+const collectNamedMultiKeyRecentBuckets = (
+  provider: NamedMultiKeyProvider,
   usageByProvider: ProviderRecentUsageMap
 ): RecentRequestBucket[] => {
   if (!provider.apiKeyEntries?.length) {
@@ -221,14 +297,14 @@ const collectOpenAIProviderRecentBuckets = (
 };
 
 export function getOpenAIProviderRecentWindowStats(
-  provider: OpenAIProviderConfig,
+  provider: NamedMultiKeyProvider,
   usageByProvider: ProviderRecentUsageMap
 ): { success: number; failure: number } {
-  return sumRecentRequests(collectOpenAIProviderRecentBuckets(provider, usageByProvider));
+  return sumRecentRequests(collectNamedMultiKeyRecentBuckets(provider, usageByProvider));
 }
 
 export function getOpenAIProviderTotalStats(
-  provider: OpenAIProviderConfig,
+  provider: NamedMultiKeyProvider,
   usageByProvider: ProviderRecentUsageMap
 ): { success: number; failure: number } {
   return (provider.apiKeyEntries || []).reduce(
@@ -249,10 +325,10 @@ export function getOpenAIProviderTotalStats(
 }
 
 export function getOpenAIProviderRecentStatusData(
-  provider: OpenAIProviderConfig,
+  provider: NamedMultiKeyProvider,
   usageByProvider: ProviderRecentUsageMap
 ): StatusBarData {
   return statusBarDataFromRecentRequests(
-    collectOpenAIProviderRecentBuckets(provider, usageByProvider)
+    collectNamedMultiKeyRecentBuckets(provider, usageByProvider)
   );
 }

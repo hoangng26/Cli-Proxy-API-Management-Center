@@ -18,7 +18,12 @@ import {
   type ExcludedModelsCatalogState,
 } from '@/components/excludedModels';
 import { hasDisableAllModelsRule } from '@/components/providers/utils';
-import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
+import type {
+  CommandCodeProviderConfig,
+  GeminiKeyConfig,
+  OpenAIProviderConfig,
+  ProviderKeyConfig,
+} from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import { PROVIDER_DESCRIPTORS } from '../../descriptors';
 import { readThinkingLevels } from '../../thinkingLevels';
@@ -113,7 +118,10 @@ function buildInitialForm(
         brand === 'interactions'
           ? ''
           : undefined,
-      apiKeyEntries: brand === 'openaiCompatibility' ? [emptyApiKeyEntry()] : undefined,
+      apiKeyEntries:
+        brand === 'openaiCompatibility' || brand === 'commandcode'
+          ? [emptyApiKeyEntry()]
+          : undefined,
     };
   }
 
@@ -145,6 +153,45 @@ function buildInitialForm(
         : [emptyHeader()],
       excludedModelsText: '',
       testModel: cfg.testModel ?? '',
+      apiKeyEntries: cfg.apiKeyEntries?.length
+        ? cfg.apiKeyEntries.map((entry) => ({
+            apiKey: '',
+            existingApiKey: entry.apiKey,
+            proxyUrl: entry.proxyUrl ?? '',
+            weight: entry.weight,
+            authIndex: entry.authIndex,
+          }))
+        : [emptyApiKeyEntry()],
+    };
+  }
+
+  if (brand === 'commandcode') {
+    const cfg = raw as CommandCodeProviderConfig;
+    const disabled = cfg.disabled === true || hasDisableAllModelsRule(cfg.excludedModels);
+    const excludedList = stripDisableAllRule(cfg.excludedModels);
+    return {
+      apiKey: '',
+      name: cfg.name ?? '',
+      baseUrl: cfg.baseUrl ?? COMMANDCODE_API_BASE_URL,
+      proxyUrl: '',
+      prefix: cfg.prefix ?? '',
+      disabled,
+      disableCooling: cfg.disableCooling === true,
+      priority: cfg.priority,
+      models: cfg.models?.length
+        ? cfg.models.map((m) => ({
+            name: m.name,
+            alias: m.alias ?? '',
+            priority: m.priority,
+            testModel: m.testModel,
+            thinkingJson: formatJsonObject(m.thinking),
+            thinkingLevels: readThinkingLevels(m.thinking),
+          }))
+        : [emptyModel()],
+      headers: cfg.headers
+        ? Object.entries(cfg.headers).map(([k, v]) => ({ key: k, value: String(v) }))
+        : [emptyHeader()],
+      excludedModelsText: excludedList.join('\n'),
       apiKeyEntries: cfg.apiKeyEntries?.length
         ? cfg.apiKeyEntries.map((entry) => ({
             apiKey: '',
@@ -246,7 +293,7 @@ export function BaseProviderForm({
 
   const fallbackApiKey = useMemo(() => {
     if (mode !== 'edit' || !resource) return '';
-    if (brand === 'openaiCompatibility') return '';
+    if (brand === 'openaiCompatibility' || brand === 'commandcode') return '';
     return (resource.raw as { apiKey?: string } | undefined)?.apiKey ?? '';
   }, [brand, mode, resource]);
 
@@ -406,11 +453,10 @@ export function BaseProviderForm({
     if (descriptor.baseUrlRequired && !form.baseUrl.trim()) {
       return t('providersPage.form.validation.baseUrlRequired');
     }
+    const usesApiKeyEntries = brand === 'openaiCompatibility' || brand === 'commandcode';
     const weights = [
-      ...(brand === 'openaiCompatibility'
-        ? (form.apiKeyEntries ?? []).map((entry) => entry.weight)
-        : []),
-      ...(brand !== 'openaiCompatibility' ? [form.weight] : []),
+      ...(usesApiKeyEntries ? (form.apiKeyEntries ?? []).map((entry) => entry.weight) : []),
+      ...(!usesApiKeyEntries ? [form.weight] : []),
     ];
     if (weights.some((weight) => weight !== undefined && !Number.isSafeInteger(weight))) {
       return t('providersPage.form.validation.weightInteger');
@@ -656,7 +702,7 @@ export function BaseProviderForm({
           </div>
         ) : null}
 
-        {brand !== 'openaiCompatibility' ? (
+        {brand !== 'openaiCompatibility' && brand !== 'commandcode' ? (
           <div className={styles.field}>
             <label className={styles.label} htmlFor={`${fid}-weight`}>
               {t('providersPage.form.weight')}
@@ -684,6 +730,7 @@ export function BaseProviderForm({
               {t('providersPage.form.testModel')}
               {brand === 'codex' ||
               brand === 'xai' ||
+              brand === 'commandcode' ||
               isClaudeLikeBrand(brand) ||
               brand === 'gemini' ||
               brand === 'interactions' ? (
